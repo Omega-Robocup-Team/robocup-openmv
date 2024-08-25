@@ -24,7 +24,7 @@ class TrackedObject:
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
         self.roi = None
-        self.new_value = False
+        self.new_value = 0
         self.best_match = None
         self.angle = 0
         self.dist = 0
@@ -81,7 +81,7 @@ class TrackedObject:
         if len(self.blobs) > 0:
             self.best_match = max(self.blobs, key=self.evaluate_blob)
             self.get_vector(self.best_match)
-            self.new_value = True
+            self.new_value = 1
         else:
             self.best_match = None
 
@@ -126,9 +126,12 @@ data = None
 
 
 def generate_data():
-    global data
+    global data, ball, yellow_goal, blue_goal
     data = ustruct.pack('<bbhhbhhbhh', 85, ball.new_value, ball.angle, ball.dist, yellow_goal.new_value,
                         yellow_goal.angle, yellow_goal.dist, blue_goal.new_value, blue_goal.angle, blue_goal.dist)
+    ball.new_value = 0
+    yellow_goal.new_value = 0
+    blue_goal.new_value = 0
 
 
 def nss_callback(line):
@@ -160,4 +163,4 @@ while True:
         img.draw_cross(center)
         img.draw_circle(center[0], center[1], radius)
 
-    print(ball.new_value, , 'fps:', clock.fps())
+    print(ball.new_value, ball.angle, 'fps:', clock.fps())
