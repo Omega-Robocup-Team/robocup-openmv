@@ -163,4 +163,5 @@ while True:
         img.draw_cross(center)
         img.draw_circle(center[0], center[1], radius)
 
-    print(ball.new_value, ball.angle, 'fps:', clock.fps())
+    print(ball.new_value, ball.angle, ball.dist, yellow_goal.new_value, yellow_goal.angle,
+          yellow_goal.dist, blue_goal.new_value, blue_goal.angle, blue_goal.dist, 'fps:', clock.fps())
