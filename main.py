@@ -6,17 +6,20 @@ import image
 import math
 
 debug_mode = 1
-robot_num = 1
+robot_num = 0
 
-#ball_threshold = [(49, 75, 14, 51, -1, 49)]
-ball_threshold = [(20, 45, 0, 30, 4, 34)]
-#yellow_threshold = [(73, 87, -6, 51, 28, 56)]
-yellow_threshold = [(35, 39, -10, 7, 12, 34)]
-#blue_threshold = [(41, 56, -34, 51, -45, -19)]
-blue_threshold = [(25, 31, -14, 5, -17, -1)]
+ball_threshold = [(15, 48, 26, 66, -5, 54)]
+#ball_threshold = [(20, 45, 0, 30, 4, 34)]
+yellow_threshold = [(30, 42, 1, 18, 7, 47)]
+#yellow_threshold = [(35, 39, -10, 7, 12, 34)]
+blue_threshold = [(20, 30, -18, 1, -37, -6)]
+#blue_threshold = [(25, 31, -14, 5, -17, -1)]
 
-center = (365, 247) if robot_num else (365, 247)
-radius = 340 if robot_num else 340
+line_threshold = [(45, 60, -32, -11, -11, 20)]
+#line_threshold = [(54, 72, -20, -6, -5, 20)]
+
+center = (383, 264) if robot_num else (454, 276)
+radius = 320 if robot_num else 340
 inner_radius = 75
 
 fps = 0
@@ -121,29 +124,76 @@ class TrackedObject:
             self.draw_blob(img, blob, (0, 255, 0)
                            if blob is self.best_match else (255, 255, 255))
 
+class Line:
+    def __init__(self, threshold) -> None:
+        self.threshold = threshold
+        self.arr = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        self.segment_size = 15
+        self.segment_dist = 100
+        self.segment_n = 16
+
+        self.visible = False
+        self.angle = 0
+        self.dist = 0
+
+    def find(self, img) -> None:
+        self.arr = []
+        self.visible = 0
+        for i in range(self.segment_n):
+            self.arr.append(self.find_segment(img, i))
+
+    def find_segment(self, img, i) -> None:
+        blobs = img.find_blobs(
+            self.threshold,
+            roi=self.get_roi(i),
+            merge=True,
+            margin=self.segment_size * 2,
+            area_threshold=200,
+        )
+        return len(blobs) > 0
+
+    def get_roi(self, i) -> None:
+        angle, x, y = self.get_coord(i)
+        return (x - self.segment_size, y - self.segment_size, self.segment_size * 2, self.segment_size * 2)
+
+    def draw(self, img) -> None:
+        for i in range(len(self.arr)):
+            angle, x, y = self.get_coord(i)
+            img.draw_rectangle(self.get_roi(i), color=(255, 0, 0) if self.arr[i] else (0, 255, 0), thickness=1)
+            img.draw_string(x, y, str(i), (255, 255, 255))
+
+    def get_coord(self, i):
+        angle = i * (360 / self.segment_n) / 180 * math.pi
+        x = center[0] + int(self.segment_dist * math.cos(angle))
+        y = center[1] - int(self.segment_dist * math.sin(angle))
+        return angle, x, y
+
 sensor.reset()
 sensor.set_pixformat(sensor.RGB565)
 sensor.set_framesize(sensor.SVGA)
 sensor.skip_frames(time=2000)
-sensor.set_auto_gain(False)
+auto_gain_db = sensor.get_gain_db()
+sensor.set_auto_gain(False, gain_db = auto_gain_db * 0.7)
 sensor.set_auto_whitebal(False)
+sensor.set_contrast(-3)
 
-sensor.set_brightness(3)
+#sensor.set_brightness(3)
 
 clock = time.clock()
 spi = pyb.SPI(2, pyb.SPI.SLAVE, polarity=0, phase=0)
 
-ball = TrackedObject(0, ball_threshold, 50, 50, 8000)
-yellow_goal = TrackedObject(1, yellow_threshold, 50, 0, 20000)
-blue_goal = TrackedObject(1, blue_threshold, 50, 0, 20000)
+ball = TrackedObject(0, ball_threshold, 50, 20, 8000)
+yellow_goal = TrackedObject(1, yellow_threshold, 50, 0, 50000)
+blue_goal = TrackedObject(1, blue_threshold, 50, 0, 50000)
+line = Line(line_threshold)
 
 data = None
 
 
 def generate_data():
     global data
-    data = ustruct.pack('<bbhhbhhbhhb', 85, ball.new_value, ball.angle, ball.dist, yellow_goal.new_value,
-                        yellow_goal.angle, yellow_goal.dist, blue_goal.new_value, blue_goal.angle, blue_goal.dist, int(fps))
+    data = ustruct.pack(f'<bbhhbhhbhh{'b'*16}b', 85, ball.new_value, ball.angle, ball.dist, yellow_goal.new_value,
+                        yellow_goal.angle, yellow_goal.dist, blue_goal.new_value, blue_goal.angle, blue_goal.dist, *list(line.arr[i] for i in range(16)), int(fps))
 
 
 def nss_callback(line):
@@ -164,6 +214,7 @@ while True:
     ball.find(img)
     yellow_goal.find(img)
     blue_goal.find(img)
+    line.find(img)
 
     generate_data()
 
@@ -174,7 +225,9 @@ while True:
         img.draw_cross(center)
         img.draw_circle(center[0], center[1], radius)
         img.draw_circle(center[0], center[1], inner_radius)
+        line.draw(img)
 
     fps = clock.fps()
-    print(ball.new_value, ball.angle, ball.dist, yellow_goal.new_value, yellow_goal.angle,
-          yellow_goal.dist, blue_goal.new_value, blue_goal.angle, blue_goal.dist, 'fps:', fps)
+    print(ball.dist)
+#    print(ball.new_value, ball.angle, ball.dist, yellow_goal.new_value, yellow_goal.angle,
+#          yellow_goal.dist, blue_goal.new_value, blue_goal.angle, blue_goal.dist, 'fps:', fps)
